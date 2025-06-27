@@ -1,5 +1,5 @@
 {
-  "name": "auditbridge-mcp",
+  "name": "audit-bridge-mcp",
   "version": "1.0.0",
   "description": "",
   "main": "build/index.js",
