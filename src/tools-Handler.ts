@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 import {
     listManualChecks,
-    checkAdminRightsViaSSH
+    checkAdminRightsViaSSH,
+    runRemoteAuditSetup
 } from './tools/unharden-System.js';
 
 import { handleUnhardeningError } from './utils/error-handling.js';
@@ -123,6 +124,74 @@ export const handleCheckAdminRightsRemote = async (args: Record<string, unknown>
                 ]
             };
         }
+    } catch (error) {
+        const mcpError = handleUnhardeningError(error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Error: ${mcpError.message}`
+                }
+            ],
+            isError: true
+        }
+    }
+}
+
+/**
+ * Handler for running a remote audit setup on a Windows machine via SSH.
+ */
+export const RemoteAuditSetupSchema = {
+    name: 'run_remote_audit_setup',
+    description: 'Run a remote audit setup on a Windows machine via SSH.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            host: {
+                type: 'string',
+                description: 'The IP address or hostname of the remote machine.'
+            },
+            username: {
+                type: 'string',
+                description: 'The SSH username to authenticate with.'
+            },
+            password: {
+                type: 'string',
+                description: 'The SSH password to authenticate with.'
+            }
+        },
+        required: ['host', 'username', 'password']
+    }
+};
+
+export const handleRunRemoteAuditSetup = async (args: Record<string, unknown>) => {
+    try {
+        // Validate input arguments
+        const validatedArgs = z.object({
+            host: z.string(),
+            username: z.string(),
+            password: z.string()
+        }).parse(args);
+
+        // Run remote audit setup
+        const auditResults = await runRemoteAuditSetup(
+            validatedArgs.host,
+            validatedArgs.username,
+            validatedArgs.password
+        );
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Remote audit setup completed successfully on ${validatedArgs.host}.`
+                },
+                {
+                    type: 'json',
+                    data: auditResults
+                }
+            ]
+        };
     } catch (error) {
         const mcpError = handleUnhardeningError(error);
         return {

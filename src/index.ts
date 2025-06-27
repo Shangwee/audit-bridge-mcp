@@ -20,7 +20,9 @@ import {
     ManualCheckSchema,
     handleListManualChecks,
     AdminRightsSchema,
-    handleCheckAdminRightsRemote
+    handleCheckAdminRightsRemote,
+    RemoteAuditSetupSchema,
+    handleRunRemoteAuditSetup
 } from './tools-Handler.js';
 
 
@@ -47,7 +49,8 @@ const createServer = () => {
       return {
         tools: [
             ManualCheckSchema,
-            AdminRightsSchema
+            AdminRightsSchema,
+            RemoteAuditSetupSchema
         ]
       };
     }
@@ -66,6 +69,8 @@ const createServer = () => {
             return await handleListManualChecks(args) || {};
           case 'check_admin_rights_remote':
             return await handleCheckAdminRightsRemote(args) || {};
+          case 'run_remote_audit_setup':
+            return await handleRunRemoteAuditSetup(args) || {};
           default:
             return {
               content: [

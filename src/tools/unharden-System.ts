@@ -4,6 +4,7 @@
  */
 
 import { NodeSSH } from 'node-ssh';
+import dayjs from 'dayjs';
 
 const ssh = new NodeSSH();
 
@@ -114,3 +115,110 @@ export async function checkAdminRightsViaSSH(
   }
 }
 
+
+/**
+ * Runs a remote audit setup on a Windows machine via SSH.
+ * @param host - The IP address or hostname of the remote machine.
+ * @param username - The SSH username to authenticate with.
+ * @param password - The SSH password to authenticate with.
+ * @returns A promise that resolves to the audit results.
+ */
+export async function runRemoteAuditSetup(
+  host: string,
+  username: string,
+  password: string
+): Promise<any> {
+  const timestamp = dayjs().toISOString();
+  const logDir = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD-HHmmss")}`;
+  const result: any = {
+    host,
+    timestamp,
+    registry_exports: {},
+    registry_values: {},
+    services: {},
+    firewall: {},
+    network: {},
+    notes: []
+  };
+
+  const registryExportCmds = {
+    Parameters: `"reg export HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters ${logDir}\\Parameters.reg /y"`,
+    System: `"reg export HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System ${logDir}\\System.reg /y"`
+  };
+
+  const registryQueryCmds = {
+    SMB1: `reg query "HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters" /v SMB1`,
+    AutoShareWks: `reg query "HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters" /v AutoShareWks`,
+    AutoShareServer: `reg query "HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters" /v AutoShareServer`,
+    LocalAccountTokenFilterPolicy: `reg query "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System" /v LocalAccountTokenFilterPolicy`
+  };
+
+  try {
+    await ssh.connect({ host, username, password });
+
+    // Create log directory
+    await ssh.execCommand(`powershell -Command "New-Item -ItemType Directory -Path '${logDir}' -Force"`);
+
+    // Registry exports
+    for (const [key, cmd] of Object.entries(registryExportCmds)) {
+      await ssh.execCommand(`powershell -Command ${cmd}`);
+      result.registry_exports[key] = `${logDir}\\${key}.reg`;
+    }
+
+    // Registry queries
+    for (const [key, regQuery] of Object.entries(registryQueryCmds)) {
+      const output = await ssh.execCommand(`powershell -Command "${regQuery}"`);
+      const match = output.stdout.match(/REG_DWORD\s+0x(\d+)/);
+      result.registry_values[key] = match ? parseInt(match[1], 16).toString() : "unknown";
+    }
+
+    // Symantec service status
+    const sepService = await ssh.execCommand(`powershell -Command "sc query SepMasterService"`);
+    const state = sepService.stdout.match(/STATE\s+:\s+\d+\s+(\w+)/);
+    result.services["SepMasterService"] = state ? state[1] : "unknown";
+
+    // Firewall state
+    const fwOutput = await ssh.execCommand(`netsh advfirewall show allprofiles state`);
+
+    const profileStates = {
+      DomainProfile: 'unknown',
+      PrivateProfile: 'unknown',
+      PublicProfile: 'unknown'
+    };
+
+    const lines = fwOutput.stdout.split(/\r?\n/);
+    let currentProfile: keyof typeof profileStates | null = null;
+
+    for (const line of lines) {
+      if (line.includes('Domain Profile Settings')) currentProfile = 'DomainProfile';
+      else if (line.includes('Private Profile Settings')) currentProfile = 'PrivateProfile';
+      else if (line.includes('Public Profile Settings')) currentProfile = 'PublicProfile';
+      else if (/^\s*State\s*:?/i.test(line) && currentProfile) {
+        const match = line.match(/State\s*:?\s*(\w+)/i);
+        if (match) profileStates[currentProfile] = match[1].toUpperCase();
+        currentProfile = null;
+      }
+    }
+
+    result.firewall = profileStates;
+
+    // IP Address
+    const ipOut = await ssh.execCommand(`powershell -Command "(Get-NetIPAddress | Where-Object { $_.AddressFamily -eq 'IPv4' -and $_.IPAddress -notlike '169.*' }).IPAddress"`);
+    result.network.IPv4Addresses = ipOut.stdout.trim().split(/\r?\n/).filter(Boolean);
+
+    result.notes.push(
+      "Ensure the Auditor checks the real-time state of Symantec",
+      "Verify firewall rules manually if unexpected results occur"
+    );
+
+    return result;
+  } catch (err) {
+    return {
+      host,
+      timestamp,
+      error: `Audit failed: ${(err as Error).message}`
+    };
+  } finally {
+    ssh.dispose();
+  }
+}
