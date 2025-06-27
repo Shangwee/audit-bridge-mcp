@@ -1,0 +1,14 @@
+# Node.js dependencies
+build
+node_modules
+dist
+coverage
+.vscode
+.DS_Store
+
+# Environment variables
+.env
+
+# Logs
+logs
+npm-debug.log*
