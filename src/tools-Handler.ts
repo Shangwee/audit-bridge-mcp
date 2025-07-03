@@ -3,8 +3,11 @@ import { z } from 'zod';
 import {
     listManualChecks,
     checkAdminRightsViaSSH,
-    runRemoteAuditSetup
-} from './tools/unharden-System.js';
+    runRemoteAuditSetup,
+    checkRegistryKeys,
+    addRegistryKeys,
+    deleteRegistryKeys
+} from './tools/commands.js';
 
 import { handleUnhardeningError } from './utils/error-handling.js';
 
@@ -205,3 +208,207 @@ export const handleRunRemoteAuditSetup = async (args: Record<string, unknown>) =
         }
     }
 }
+
+/**
+ * handler for checking registry key settings on a remote Windows machine via SSH.
+ */
+export const RegistryKeySchema = {
+    name: 'check_registry_key',
+    description: 'Check all registry key settings.',
+    inputSchema: {          
+        type: 'object',
+        properties: {
+            host: {
+                type: 'string',
+                description: 'The IP address or hostname of the remote machine.'
+            },
+            username: {
+                type: 'string',
+                description: 'The SSH username to authenticate with.'
+            },
+            password: {
+                type: 'string',
+                description: 'The SSH password to authenticate with.'
+            }
+        },
+        required: ['host', 'username', 'password']
+    }
+};
+
+export const handleCheckRegistryKey = async (args: Record<string, unknown>) => {
+    try {
+        // Validate input arguments
+        const validatedArgs = z.object({
+            host: z.string(),
+            username: z.string(),
+            password: z.string(),
+        }).parse(args);
+
+        // Run registry key check
+        const checkResults = await checkRegistryKeys(
+            validatedArgs.host,
+            validatedArgs.username,
+            validatedArgs.password,
+        );
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Registry key check completed successfully on ${validatedArgs.host}.`
+                },
+                {
+                    type: 'json',
+                    data: checkResults
+                }
+            ]
+        };
+    } catch (error) {
+        const mcpError = handleUnhardeningError(error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Error: ${mcpError.message}`
+                }
+            ],
+            isError: true
+        }
+    }
+}
+
+/**
+ * Handler for adding registry keys on a remote Windows machine via SSH.
+ */
+export const AddRegistryKeysSchema = {
+    name: 'add_registry_keys',
+    description: 'Add registry keys on a remote Windows machine via SSH.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            host: {
+                type: 'string',
+                description: 'The IP address or hostname of the remote machine.'
+            },
+            username: {
+                type: 'string',
+                description: 'The SSH username to authenticate with.'
+            },
+            password: {
+                type: 'string',
+                description: 'The SSH password to authenticate with.'
+            },
+        },
+        required: ['host', 'username', 'password']
+    }
+};
+
+export const handleAddRegistryKeys = async (args: Record<string, unknown>) => {
+    try {
+         // Validate input arguments
+        const validatedArgs = z.object({
+            host: z.string(),
+            username: z.string(),
+            password: z.string(),
+        }).parse(args);
+
+        // Run registry key addition
+        const addResults = await addRegistryKeys(
+            validatedArgs.host,
+            validatedArgs.username,
+            validatedArgs.password,
+        );
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Registry keys added successfully on ${validatedArgs.host}.`
+                },
+                {
+                    type: 'json',
+                    data: addResults
+                }
+            ]
+        };
+    } catch (error) {
+        const mcpError = handleUnhardeningError(error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Error: ${mcpError.message}`
+                }
+            ],
+            isError: true
+        }
+    }
+};
+
+/**
+ * Handler for deleting registry keys on a remote Windows machine via SSH.
+ */
+export const DeleteRegistryKeysSchema = {
+    name: 'delete_registry_keys',
+    description: 'Delete registry keys on a remote Windows machine via SSH.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            host: {
+                type: 'string',
+                description: 'The IP address or hostname of the remote machine.'
+            },
+            username: {
+                type: 'string',
+                description: 'The SSH username to authenticate with.'
+            },
+            password: {
+                type: 'string',
+                description: 'The SSH password to authenticate with.'
+            },
+        },
+        required: ['host', 'username', 'password']
+    }
+};
+
+export const handleDeleteRegistryKeys = async (args: Record<string, unknown>) => {
+    try {
+        // Validate input arguments
+        const validatedArgs = z.object({
+            host: z.string(),
+            username: z.string(),
+            password: z.string(),
+        }).parse(args);
+
+        // Delete registry keys
+        const deleteResults = await deleteRegistryKeys(
+            validatedArgs.host,
+            validatedArgs.username,
+            validatedArgs.password,
+        );
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Registry keys deleted successfully on ${validatedArgs.host}.`
+                },
+                {
+                    type: 'json',
+                    data: deleteResults
+                }
+            ]
+        };
+    } catch (error) {
+        const mcpError = handleUnhardeningError(error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Error: ${mcpError.message}`
+                }
+            ],
+            isError: true
+        }
+    }
+};

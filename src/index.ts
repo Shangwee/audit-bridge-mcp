@@ -22,16 +22,21 @@ import {
     AdminRightsSchema,
     handleCheckAdminRightsRemote,
     RemoteAuditSetupSchema,
-    handleRunRemoteAuditSetup
+    handleRunRemoteAuditSetup,
+    RegistryKeySchema,
+    handleCheckRegistryKey,
+    AddRegistryKeysSchema,
+    handleAddRegistryKeys,
+    DeleteRegistryKeysSchema,
+    handleDeleteRegistryKeys
 } from './tools-Handler.js';
-
 
 // Create and configure the MCP server
 const createServer = () => {
   // Create the server instance
   const server = new Server(
     {
-      name: 'susan-server',
+      name: 'Audit-Bridge-server',
       version: '1.0.0'
     },
     {
@@ -41,7 +46,6 @@ const createServer = () => {
     }
   );
 
-  
   // Register tools list handler
   server.setRequestHandler(
     ListToolsRequestSchema,
@@ -50,7 +54,10 @@ const createServer = () => {
         tools: [
             ManualCheckSchema,
             AdminRightsSchema,
-            RemoteAuditSetupSchema
+            RemoteAuditSetupSchema,
+            RegistryKeySchema,
+            AddRegistryKeysSchema,
+            // DeleteRegistryKeysSchema
         ]
       };
     }
@@ -71,6 +78,12 @@ const createServer = () => {
             return await handleCheckAdminRightsRemote(args) || {};
           case 'run_remote_audit_setup':
             return await handleRunRemoteAuditSetup(args) || {};
+          case 'check_registry_key':
+            return await handleCheckRegistryKey(args) || {};
+          case 'add_registry_keys':
+            return await handleAddRegistryKeys(args) || {};
+          // case 'delete_registry_keys':
+          //   return await handleDeleteRegistryKeys(args) || {};
           default:
             return {
               content: [

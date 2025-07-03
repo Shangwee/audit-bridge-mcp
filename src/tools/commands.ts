@@ -67,6 +67,47 @@ const manualCheckGuides: Record<"local" | "services" | "network", string> = {
 };
 
 /**
+ * Logs a command execution and runs it via SSH.
+ * @param logFile - The file to log the command output.
+ * @param label - A label for the command being executed.
+ * @param rawCommand - The raw command to execute.
+ * @returns The result of the SSH command execution.
+ */
+const logAndRun = async (logFile:string, label: string, rawCommand: string) => {
+    const escapedCmd = rawCommand.replace(/"/g, '`"'); // Escape quotes in cmd
+    const powershellCommand = `
+      Add-Content -Path '${logFile}' '[${label}]';
+      Add-Content -Path '${logFile}' 'Command: ${rawCommand.replace(/'/g, "''")}';
+      ${escapedCmd} | Out-File -Append -FilePath '${logFile}' -Encoding UTF8;
+    `.trim();
+
+    const encoded = powershellCommand.replace(/\n/g, " ");
+    return ssh.execCommand(`powershell -NoProfile -Command "${encoded}"`);
+};
+
+const createElevatedRegTask = async (auditDir:string, logFile:string, key: string, regCmd: string) => {
+ const taskName = `SetRegistry_${key}_${Date.now()}`;
+    const cmdFile = `${auditDir}\\${taskName}.cmd`;
+
+    const writeScriptCmd = `
+      Set-Content -Path '${cmdFile}' -Value '${regCmd.replace(/'/g, "''")}'
+    `.trim().replace(/\n/g, ';');
+
+    const scheduleCmd = `
+      schtasks /Create /TN ${taskName} /TR "${cmdFile}" /SC ONCE /ST 00:00 /RL HIGHEST /F;
+      schtasks /Run /TN ${taskName};
+      timeout /t 3 >nul;
+      schtasks /Delete /TN ${taskName} /F
+    `.trim().replace(/\n/g, ' ');
+
+    await logAndRun(logFile,`Set ${key}`, regCmd);
+    await ssh.execCommand(`powershell -Command "${writeScriptCmd}"`);
+
+    const runResult = await ssh.execCommand(`powershell -Command "${scheduleCmd}"`);
+    return runResult.stderr ? `Error: ${runResult.stderr.trim()}` : 'Scheduled and executed';
+};
+
+/**
  * Returns a Nessus manual check guide string based on type.
  * @param type - "local", "services", or "network"
  * @returns A formatted Nessus manual check guide
@@ -115,8 +156,6 @@ export async function checkAdminRightsViaSSH(
   }
 }
 
-
-
 /**
  * Runs a remote audit setup on a Windows machine via SSH.
  * @param host - The IP address or hostname of the remote machine.
@@ -130,7 +169,7 @@ export async function runRemoteAuditSetup(
   password: string
 ): Promise<any> {
   const timestamp = dayjs().toISOString();
-  const logDir = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD-HHmmss")}`;
+  const logDir = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD")}`;
   const logFile = `${logDir}\\audit-log.txt`;
 
   const result: any = {
@@ -141,7 +180,9 @@ export async function runRemoteAuditSetup(
     services: {},
     firewall: {},
     network: {},
-    notes: []
+    notes: [],
+    logDir: logDir,
+    logFile: logFile,
   };
 
   const registryExportCmds = {
@@ -156,36 +197,23 @@ export async function runRemoteAuditSetup(
     LocalAccountTokenFilterPolicy: `reg query "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System" /v LocalAccountTokenFilterPolicy`
   };
 
-  const logAndRun = async (label: string, rawCommand: string) => {
-    const escapedCmd = rawCommand.replace(/"/g, '`"'); // Escape quotes in cmd
-    const powershellCommand = `
-      Add-Content -Path '${logFile}' '[${label}]';
-      Add-Content -Path '${logFile}' 'Command: ${rawCommand.replace(/'/g, "''")}';
-      ${escapedCmd} | Out-File -Append -FilePath '${logFile}' -Encoding UTF8;
-    `.trim();
-
-    const encoded = powershellCommand.replace(/\n/g, " ");
-    return ssh.execCommand(`powershell -NoProfile -Command "${encoded}"`);
-  };
-
-
   try {
     await ssh.connect({ host, username, password });
 
     await ssh.execCommand(`powershell -Command "New-Item -ItemType Directory -Path '${logDir}' -Force"`);
 
-    await logAndRun("Audit Start", `Get-Date`);
+    await logAndRun(logFile, "Audit Start", `Get-Date`);
 
     // Registry exports
     for (const [key, cmd] of Object.entries(registryExportCmds)) {
-      await logAndRun(`Exporting ${key}`, cmd);
+      await logAndRun(logFile, `Exporting ${key}`, cmd);
       result.registry_exports[key] = `${logDir}\\${key}.reg`;
     }
 
     // Registry queries
     for (const [key, regQuery] of Object.entries(registryQueryCmds)) {
       const queryResult = await ssh.execCommand(`powershell -Command "${regQuery}"`);
-      await logAndRun(`Query ${key}`, regQuery);
+      await logAndRun(logFile, `Query ${key}`, regQuery);
 
       if (
         queryResult.stderr.includes("unable to find") ||
@@ -202,13 +230,13 @@ export async function runRemoteAuditSetup(
 
     // Symantec service
     const sepStatus = await ssh.execCommand(`powershell -Command "sc query SepMasterService"`);
-    await logAndRun("Symantec Service Check", "sc query SepMasterService");
+    await logAndRun(logFile, "Symantec Service Check", "sc query SepMasterService");
     const state = sepStatus.stdout.match(/STATE\s+:\s+\d+\s+(\w+)/);
-    result.services["SepMasterService"] = state ? state[1] : "unknown";
+    result.services["SepMasterService"] = state ? state[1] : "Not found";
 
     // Firewall
     const fwOutput = await ssh.execCommand(`netsh advfirewall show allprofiles state`);
-    await logAndRun("Firewall Profiles", "netsh advfirewall show allprofiles state");
+    await logAndRun(logFile, "Firewall Profiles", "netsh advfirewall show allprofiles state");
 
     const profileStates = {
       DomainProfile: "unknown",
@@ -234,7 +262,7 @@ export async function runRemoteAuditSetup(
 
     // IP address
     const ipCmd = `(Get-NetIPAddress | Where-Object { $_.AddressFamily -eq 'IPv4' -and $_.IPAddress -notlike '169.*' }).IPAddress`;
-    await logAndRun("IP Address", ipCmd);
+    await logAndRun(logFile, "IP Address", ipCmd);
     const ipOut = await ssh.execCommand(`powershell -Command "${ipCmd}"`);
     result.network.IPv4Addresses = ipOut.stdout.trim().split(/\r?\n/).filter(Boolean);
 
@@ -242,8 +270,6 @@ export async function runRemoteAuditSetup(
       "Ensure the Auditor checks the real-time state of Symantec",
       "Verify firewall rules manually if unexpected results occur"
     );
-
-    await logAndRun("Audit End", `Get-Date`);
 
     return result;
   } catch (err) {
@@ -256,3 +282,168 @@ export async function runRemoteAuditSetup(
     ssh.dispose();
   }
 }
+
+/**
+ * check all registry keys that are required for nessus to work properly.
+ * @param host - The IP address or hostname of the remote machine.
+ * @param username - The SSH username to authenticate with.
+ * @param password - The SSH password to authenticate with.
+ * @returns A promise that resolves to the audit results.
+ */
+export async function checkRegistryKeys(
+  host: string,
+  username: string,
+  password: string,
+){
+  const logFile = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD")}\\audit-log.txt`;
+
+ const registryQueryCmds = {
+    SMB1: `reg query "HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters" /v SMB1`,
+    AutoShareWks: `reg query "HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters" /v AutoShareWks`,
+    AutoShareServer: `reg query "HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters" /v AutoShareServer`,
+    LocalAccountTokenFilterPolicy: `reg query "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System" /v LocalAccountTokenFilterPolicy`
+  };
+
+  const results: any = {
+    host,
+    registry_values: {},
+    logFile: logFile,
+  };
+
+  try {
+    await ssh.connect({ host, username, password });
+
+    await logAndRun(logFile, "Check for registry keys", `Get-Date`);
+
+    // Registry queries
+    for (const [key, regQuery] of Object.entries(registryQueryCmds)) {
+      const queryResult = await ssh.execCommand(`powershell -Command "${regQuery}"`);
+      await logAndRun(logFile, `Query ${key}`, regQuery);
+
+      if (
+        queryResult.stderr.includes("unable to find") ||
+        queryResult.stdout.includes("ERROR")
+      ) {
+        results.registry_values[key] = "not found";
+      } else {
+        const match = queryResult.stdout.match(/REG_DWORD\s+0x([0-9a-fA-F]+)/);
+        results.registry_values[key] = match
+          ? parseInt(match[1], 16).toString()
+          : "unknown";
+      }
+    }
+
+    await logAndRun(logFile, "Check for registry keys complete", `Get-Date`);
+
+    return results;
+  } catch (err) {
+    throw new Error(`Registry check failed: ${(err as Error).message}`);
+  } finally {
+    ssh.dispose();
+  }
+}
+
+/**
+ * Adds or updates registry keys on a remote Windows machine via SSH.
+ * @param host - IP or hostname of the target machine.
+ * @param username - SSH username with admin rights.
+ * @param password - SSH password.
+ * @returns A Promise with execution results.
+ */
+export async function addRegistryKeys(
+  host: string,
+  username: string,
+  password: string
+): Promise<string> {
+  const timestamp = dayjs().toISOString();
+  const logDir = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD")}`;
+  const logFile = `${logDir}\\audit-log.txt`;
+
+  const results: any = {
+    host,
+    timestamp,
+    logDir: logDir,
+    logFile: logFile,
+    output: "",
+  };
+
+  try {
+    await ssh.connect({ host, username, password });
+
+    const addRegistryKeysBat = `C:\\tools\\add-registry-keys.bat`;
+
+    // Run the .bat file from C:\tools
+    const result = await ssh.execCommand(
+      `powershell -command ${addRegistryKeysBat}`
+    );
+
+    await logAndRun(logFile, "Add Registry Keys", `powershell -command ${addRegistryKeysBat}`);
+
+    if (result.stderr) {
+      return `Error: ${result.stderr}`;
+    }
+  
+    if (result.stdout) {
+      results.output = result.stdout.trim();
+    }
+    
+    return results;
+  } catch (err) {
+    return `SSH execution failed: ${(err as Error).message}`;
+  } finally {
+      try {
+        ssh.dispose();
+      } catch (disposeErr) {
+        console.warn('SSH dispose failed:', (disposeErr as Error).message);
+      }
+  }
+}
+
+/**
+ * Delete all registry keys added
+ * @param host - The IP address or hostname of the remote machine.
+ * @param username - The SSH username to authenticate with.
+ * @param password - The SSH password to authenticate with.
+ * @returns A promise that resolves to the audit results.
+ */
+export async function deleteRegistryKeys(
+  host: string,
+  username: string,
+  password: string
+): Promise<{ [key: string]: string }> {
+  const registryCommands: Record<string, string> = {
+    SMB1: `REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v SMB1 /f`,
+    AutoShareWks: `REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareWks /f`,
+    AutoShareServer: `REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareServer /f`,
+    LocalAccountTokenFilterPolicy: `REG DELETE HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v LocalAccountTokenFilterPolicy /f`
+  };
+
+  const results: Record<string, string> = {};
+  const timestamp = dayjs().format("YYYYMMDD-HHmmss");
+  const auditDir = `C:\\AuditLogs\\${timestamp}`;
+  const logFile = `${auditDir}\\audit-log.txt`;
+
+  try {
+    await ssh.connect({ host, username, password });
+    await ssh.execCommand(`powershell -Command "New-Item -Path '${auditDir}' -ItemType Directory -Force"`);
+
+    for (const [key, command] of Object.entries(registryCommands)) {
+      try {
+        const result = await createElevatedRegTask(auditDir, logFile, key, command);
+        results[key] = result;
+      } catch (error) {
+        results[key] = `Failed: ${(error as Error).message}`;
+      }
+    }
+  } catch (err) {
+    for (const key of Object.keys(registryCommands)) {
+      results[key] = `Connection error: ${(err as Error).message}`;
+    }
+  } finally {
+    ssh.dispose();
+  }
+
+  return results;
+}
+
+
