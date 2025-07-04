@@ -57,7 +57,7 @@ const createServer = () => {
             RemoteAuditSetupSchema,
             RegistryKeySchema,
             AddRegistryKeysSchema,
-            // DeleteRegistryKeysSchema
+            DeleteRegistryKeysSchema
         ]
       };
     }
@@ -82,8 +82,8 @@ const createServer = () => {
             return await handleCheckRegistryKey(args) || {};
           case 'add_registry_keys':
             return await handleAddRegistryKeys(args) || {};
-          // case 'delete_registry_keys':
-          //   return await handleDeleteRegistryKeys(args) || {};
+          case 'delete_registry_keys':
+            return await handleDeleteRegistryKeys(args) || {};
           default:
             return {
               content: [
