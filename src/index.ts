@@ -28,7 +28,9 @@ import {
     AddRegistryKeysSchema,
     handleAddRegistryKeys,
     DeleteRegistryKeysSchema,
-    handleDeleteRegistryKeys
+    handleDeleteRegistryKeys,
+    ImportBatFileSchema,
+    handleImportBatFile
 } from './tools-Handler.js';
 
 // Create and configure the MCP server
@@ -57,7 +59,8 @@ const createServer = () => {
             RemoteAuditSetupSchema,
             RegistryKeySchema,
             AddRegistryKeysSchema,
-            DeleteRegistryKeysSchema
+            DeleteRegistryKeysSchema,
+            ImportBatFileSchema
         ]
       };
     }
@@ -84,6 +87,8 @@ const createServer = () => {
             return await handleAddRegistryKeys(args) || {};
           case 'delete_registry_keys':
             return await handleDeleteRegistryKeys(args) || {};
+          case 'import_bat_file':
+            return await handleImportBatFile(args) || {};
           default:
             return {
               content: [

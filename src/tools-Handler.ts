@@ -6,7 +6,8 @@ import {
     runRemoteAuditSetup,
     checkRegistryKeys,
     addRegistryKeys,
-    deleteRegistryKeys
+    deleteRegistryKeys,
+    remoteImportBatFile
 } from './tools/commands.js';
 
 import { handleUnhardeningError } from './utils/error-handling.js';
@@ -276,6 +277,74 @@ export const handleCheckRegistryKey = async (args: Record<string, unknown>) => {
         }
     }
 }
+
+/**
+ *  handler for importing a .bat file to a remote Windows machine via SSH.
+ */
+export const ImportBatFileSchema = {
+    name: 'import_bat_file',
+    description: 'Import a .bat file to a remote Windows machine via SSH.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            host: {
+                type: 'string',
+                description: 'The IP address or hostname of the remote machine.'
+            },
+            username: {
+                type: 'string',
+                description: 'The SSH username to authenticate with.'
+            },
+            password: {
+                type: 'string',
+                description: 'The SSH password to authenticate with.'
+            }
+        },
+        required: ['host', 'username', 'password']
+    }
+};
+
+export const handleImportBatFile = async (args: Record<string, unknown>) => {
+    try {
+        // Validate input arguments
+        const validatedArgs = z.object({
+            host: z.string(),
+            username: z.string(),
+            password: z.string(),
+        }).parse(args);
+
+        // Import .bat file to remote machine
+        const importResults = await remoteImportBatFile(
+            validatedArgs.host,
+            validatedArgs.username,
+            validatedArgs.password,
+        );
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Batch file imported successfully on ${validatedArgs.host}.`
+                },
+                {
+                    type: 'json',
+                    data: importResults
+                }
+            ]
+        };
+    } catch (error) {
+        const mcpError = handleUnhardeningError(error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Error: ${mcpError.message}`
+                }
+            ],
+            isError: true
+        }
+    }
+};
 
 /**
  * Handler for adding registry keys on a remote Windows machine via SSH.

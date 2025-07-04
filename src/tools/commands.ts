@@ -5,6 +5,9 @@
 
 import { NodeSSH } from 'node-ssh';
 import dayjs from 'dayjs';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import path from 'path';
 
 const ssh = new NodeSSH();
 
@@ -333,6 +336,111 @@ export async function checkRegistryKeys(
 }
 
 /**
+ * remote import bat file to add registry keys and delete registry keys
+ * @param host - The IP address or hostname of the remote machine.
+ * @param username - The SSH username to authenticate with.
+ * @param password - The SSH password to authenticate with.
+ * @returns A promise that resolves to the audit results. 
+ */
+
+export async function remoteImportBatFile(
+  host: string,
+  username: string,
+  password: string
+): Promise<object | string> {
+  const timestamp = dayjs().toISOString();
+  const logDir = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD")}`;
+  const logFile = `${logDir}\\audit-log.txt`;
+  const toolsDir = `C:\\tools`;
+
+  const results: Record<string, any> = {
+    host,
+    timestamp,
+    logDir,
+    logFile,
+    output: ""
+  };
+
+  // Temporary paths for bat files
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'batfiles-'));
+  const addBatPath = path.join(tempDir, 'add-registry-keys.bat');
+  const deleteBatPath = path.join(tempDir, 'delete-registry-keys.bat');
+
+  // Content for the bat files
+  const addBatContent = `@echo off
+cls
+echo =============================================================
+echo Adding Registry Keys...
+echo =============================================================
+
+:: Add SMB1
+REG ADD HKLM\System\CurrentControlSet\Services\LanmanServer\Parameters /v SMB1 /t REG_DWORD /d 0 /f
+
+:: Add AutoShareWks
+REG ADD HKLM\System\CurrentControlSet\Services\LanmanServer\Parameters /v AutoShareWks /t REG_DWORD /d 1 /f
+
+:: Add AutoShareServer
+REG ADD HKLM\System\CurrentControlSet\Services\LanmanServer\Parameters /v AutoShareServer /t REG_DWORD /d 1 /f
+
+:: Add LocalAccountTokenFilterPolicy
+REG ADD HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
+
+echo.
+echo Registry keys added successfully.
+exit /b 0
+  `;
+
+  const deleteBatContent = 
+  `@echo off
+cls
+ECHO =============================================================
+ECHO Deleting Registry Keys...
+ECHO =============================================================
+
+REG DELETE HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\LanmanServer\Parameters /v SMB1 /f
+REG DELETE HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\LanmanServer\Parameters /v AutoShareWks /f
+REG DELETE HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\LanmanServer\Parameters /v AutoShareServer /f
+REG DELETE HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\System /v LocalAccountTokenFilterPolicy /f
+
+ECHO.
+ECHO Registry keys deleted successfully.
+exit /b 0
+  `;
+
+  try {
+    // Write the bat files
+    await fs.writeFile(addBatPath, addBatContent);
+    await fs.writeFile(deleteBatPath, deleteBatContent);
+
+    await ssh.connect({ host, username, password });
+
+    // Ensure tools directory exists
+    await ssh.execCommand(`powershell -Command "New-Item -ItemType Directory -Path '${toolsDir}' -Force"`);
+
+    // Remote paths
+    const remoteAddBat = `${toolsDir}\\add-registry-keys.bat`;
+    const remoteDeleteBat = `${toolsDir}\\delete-registry-keys.bat`;
+
+    // Upload the files
+    await ssh.putFile(addBatPath, remoteAddBat);
+    await ssh.putFile(deleteBatPath, remoteDeleteBat);
+
+    await logAndRun(logFile, "Import Registry Keys Bat Files", `Uploaded .bat files to ${toolsDir}`);
+
+    results.output = `Successfully uploaded .bat files to ${toolsDir}`;
+    return results;
+  } catch (err) {
+    return `SSH execution failed: ${(err as Error).message}`;
+  } finally {
+    ssh.dispose();
+
+    // Cleanup temp files
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+
+/**
  * Adds or updates registry keys on a remote Windows machine via SSH.
  * @param host - IP or hostname of the target machine.
  * @param username - SSH username with admin rights.
@@ -441,5 +549,4 @@ export async function deleteRegistryKeys(
     ssh.dispose();
   }
 }
-
 
