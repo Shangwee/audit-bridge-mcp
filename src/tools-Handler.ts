@@ -284,7 +284,7 @@ export const handleCheckRegistryKey = async (args: Record<string, unknown>) => {
  */
 export const ImportBatFileSchema = {
     name: 'import_bat_file',
-    description: 'Import a .bat file to a remote Windows machine via SSH.',
+    description: 'Import bat files to a remote Windows machine via SSH.',
     inputSchema: {
         type: 'object',
         properties: {
