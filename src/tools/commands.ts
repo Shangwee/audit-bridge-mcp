@@ -259,6 +259,8 @@ export async function runRemoteAuditSetup(
       "Verify firewall rules manually if unexpected results occur"
     );
 
+    await logAndRun(logFile, "Audit Complete", `Get-Date`);
+
     // exit from the remote session
     await ssh.execCommand(`powershell -Command "exit"`);
 
@@ -430,6 +432,9 @@ exit /b 0
 
     await ssh.connect({ host, username, password });
 
+    // start logging
+    await logAndRun(logFile, "Import Registry Keys Bat Files", `Get-Date`);
+
     // Ensure tools directory exists
     await ssh.execCommand(`powershell -Command "New-Item -ItemType Directory -Path '${toolsDir}' -Force"`);
 
@@ -443,7 +448,7 @@ exit /b 0
     await ssh.putFile(deleteBatPath, remoteDeleteBat);
     await ssh.putFile(revertBatPath, remoteRevertBat);
 
-    await logAndRun(logFile, "Import Registry Keys Bat Files", `Uploaded .bat files to ${toolsDir}`);
+    await logAndRun(logFile, "Import Registry Keys Bat Files completed", `Uploaded .bat files to ${toolsDir}`);
 
     results.output = `Successfully uploaded .bat files to ${toolsDir}`;
     return results;
@@ -484,6 +489,8 @@ export async function addRegistryKeys(
   try {
     await ssh.connect({ host, username, password });
 
+    await logAndRun(logFile, "Add Registry Keys", `Get-Date`);
+
     const addRegistryKeysBat = `C:\\tools\\add-registry-keys.bat`;
 
     // Run the .bat file from C:\tools
@@ -500,6 +507,8 @@ export async function addRegistryKeys(
     if (result.stdout) {
       results.output = result.stdout.trim();
     }
+
+    await logAndRun(logFile, "Add Registry Keys Complete", `Get-Date`);
 
     // exit from the remote session
     await ssh.execCommand(`powershell -Command "exit"`);
@@ -539,14 +548,16 @@ export async function deleteRegistryKeys(
   try {
     await ssh.connect({ host, username, password });
 
-    const addRegistryKeysBat = `C:\\tools\\delete-registry-keys.bat`;
+    const DeleteRegistryKeysBat = `C:\\tools\\delete-registry-keys.bat`;
+
+    await logAndRun(logFile, "Delete Registry Keys", `Get-Date`);
 
     // Run the .bat file from C:\tools
     const result = await ssh.execCommand(
-      `cmd.exe /c  ${addRegistryKeysBat}`
+      `cmd.exe /c  ${DeleteRegistryKeysBat}`
     );
 
-    await logAndRun(logFile, "Delete Registry Keys", `cmd.exe /c  ${addRegistryKeysBat}`);
+    await logAndRun(logFile, "Delete Registry Keys", `cmd.exe /c  ${DeleteRegistryKeysBat}`);
 
     if (result.stderr) {
       return `Error: ${result.stderr}`;
@@ -555,6 +566,8 @@ export async function deleteRegistryKeys(
     if (result.stdout) {
       results.output = result.stdout.trim();
     }
+
+    await logAndRun(logFile, "Delete Registry Keys Complete", `Get-Date`);
     
     // exit from the remote session
     await ssh.execCommand(`powershell -Command "exit"`);
@@ -596,6 +609,8 @@ export async function revertRegistryKeys(
 
     const revertRegistryKeysBat = `C:\\tools\\revert-registry-keys.bat`;
 
+    await logAndRun(logFile, "Revert Registry Keys", `Get-Date`);
+
     // Run the .bat file from C:\tools
     const result = await ssh.execCommand(
       `cmd.exe /c  ${revertRegistryKeysBat}`
@@ -607,6 +622,8 @@ export async function revertRegistryKeys(
     if (result.stdout) {
       results.output = result.stdout.trim();
     }
+
+    await logAndRun(logFile, "Revert Registry Keys Complete", `Get-Date`);
 
     // exit from the remote session
     await ssh.execCommand(`powershell -Command "exit"`);
