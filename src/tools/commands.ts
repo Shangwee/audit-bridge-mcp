@@ -171,9 +171,11 @@ export async function runRemoteAuditSetup(
     logFile: logFile,
   };
 
+  const toolsDir = `C:\\tools`;
+
   const registryExportCmds = {
-    Parameters: `reg export HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters ${logDir}\\Parameters.reg /y`,
-    System: `reg export HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System ${logDir}\\System.reg /y`
+    Parameters: `reg export HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters ${toolsDir}\\Parameters.reg /y`,
+    System: `reg export HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System ${toolsDir}\\System.reg /y`
   };
 
   const registryQueryCmds = {
@@ -365,6 +367,7 @@ export async function remoteImportBatFile(
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'batfiles-'));
   const addBatPath = path.join(tempDir, 'add-registry-keys.bat');
   const deleteBatPath = path.join(tempDir, 'delete-registry-keys.bat');
+  const revertBatPath = path.join(tempDir, 'revert-registry-keys.bat');
 
   // Content for the bat files
   const addBatContent = `@echo off
@@ -373,17 +376,10 @@ echo =============================================================
 echo Adding Registry Keys...
 echo =============================================================
 
-:: Add SMB1
-REG ADD HKLM\System\CurrentControlSet\Services\LanmanServer\Parameters /v SMB1 /t REG_DWORD /d 0 /f
-
-:: Add AutoShareWks
-REG ADD HKLM\System\CurrentControlSet\Services\LanmanServer\Parameters /v AutoShareWks /t REG_DWORD /d 1 /f
-
-:: Add AutoShareServer
-REG ADD HKLM\System\CurrentControlSet\Services\LanmanServer\Parameters /v AutoShareServer /t REG_DWORD /d 1 /f
-
-:: Add LocalAccountTokenFilterPolicy
-REG ADD HKLM\Software\Microsoft\Windows\CurrentVersion\Policies\System /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
+REG ADD HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v SMB1 /t REG_DWORD /d 0 /f
+REG ADD HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareWks /t REG_DWORD /d 1 /f
+REG ADD HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareServer /t REG_DWORD /d 1 /f
+REG ADD HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
 
 echo.
 echo Registry keys added successfully.
@@ -397,13 +393,32 @@ ECHO =============================================================
 ECHO Deleting Registry Keys...
 ECHO =============================================================
 
-REG DELETE HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\LanmanServer\Parameters /v SMB1 /f
-REG DELETE HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\LanmanServer\Parameters /v AutoShareWks /f
-REG DELETE HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\LanmanServer\Parameters /v AutoShareServer /f
-REG DELETE HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\System /v LocalAccountTokenFilterPolicy /f
+REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v SMB1 /f
+REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareWks /f
+REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareServer /f
+REG DELETE HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v LocalAccountTokenFilterPolicy /f
 
 ECHO.
 ECHO Registry keys deleted successfully.
+exit /b 0
+  `;
+
+  const removeBatContent = `
+@echo off
+cls
+ECHO =============================================================
+ECHO Reverting Registry Keys...
+ECHO =============================================================
+
+REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v SMB1 /f
+REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareWks /f
+REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareServer /f
+REG DELETE HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v LocalAccountTokenFilterPolicy /f
+REG IMPORT C:\\tools\\System.reg
+REG IMPORT C:\\tools\\Parameters.reg
+
+ECHO.
+ECHO Registry keys reverted successfully.
 exit /b 0
   `;
 
@@ -411,6 +426,7 @@ exit /b 0
     // Write the bat files
     await fs.writeFile(addBatPath, addBatContent);
     await fs.writeFile(deleteBatPath, deleteBatContent);
+    await fs.writeFile(revertBatPath, removeBatContent);
 
     await ssh.connect({ host, username, password });
 
@@ -420,10 +436,12 @@ exit /b 0
     // Remote paths
     const remoteAddBat = `${toolsDir}\\add-registry-keys.bat`;
     const remoteDeleteBat = `${toolsDir}\\delete-registry-keys.bat`;
+    const remoteRevertBat = `${toolsDir}\\revert-registry-keys.bat`;
 
     // Upload the files
     await ssh.putFile(addBatPath, remoteAddBat);
     await ssh.putFile(deleteBatPath, remoteDeleteBat);
+    await ssh.putFile(revertBatPath, remoteRevertBat);
 
     await logAndRun(logFile, "Import Registry Keys Bat Files", `Uploaded .bat files to ${toolsDir}`);
 
@@ -438,7 +456,6 @@ exit /b 0
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 }
-
 
 /**
  * Adds or updates registry keys on a remote Windows machine via SSH.
@@ -550,3 +567,54 @@ export async function deleteRegistryKeys(
   }
 }
 
+/**
+ * Revert keys to original state
+ * @param host - The IP address or hostname of the remote machine.
+ * @param username - The SSH username to authenticate with.
+ * @param password - The SSH password to authenticate with.
+ * @return A promise that resolves to the audit results. 
+ */
+export async function revertRegistryKeys(
+  host: string,
+  username: string,
+  password: string
+): Promise<object | string> {
+  const timestamp = dayjs().toISOString();
+  const logDir = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD")}`;
+  const logFile = `${logDir}\\audit-log.txt`;
+
+  const results: any = {
+    host,
+    timestamp,
+    logDir: logDir,
+    logFile: logFile,
+    output: "",
+  };
+
+  try {
+    await ssh.connect({ host, username, password });
+
+    const revertRegistryKeysBat = `C:\\tools\\revert-registry-keys.bat`;
+
+    // Run the .bat file from C:\tools
+    const result = await ssh.execCommand(
+      `cmd.exe /c  ${revertRegistryKeysBat}`
+    );
+
+    await logAndRun(logFile, "Revert Registry Keys", `cmd.exe /c  ${revertRegistryKeysBat}`);
+
+
+    if (result.stdout) {
+      results.output = result.stdout.trim();
+    }
+
+    // exit from the remote session
+    await ssh.execCommand(`powershell -Command "exit"`);
+
+    return results;
+  } catch (err) {
+    return `SSH execution failed: ${(err as Error).message}`;
+  } finally {
+    ssh.dispose();
+  }
+};

@@ -30,7 +30,9 @@ import {
     DeleteRegistryKeysSchema,
     handleDeleteRegistryKeys,
     ImportBatFileSchema,
-    handleImportBatFile
+    handleImportBatFile,
+    RevertKeysSchema,
+    handleRevertKeys
 } from './tools-Handler.js';
 
 // Create and configure the MCP server
@@ -60,7 +62,8 @@ const createServer = () => {
             RegistryKeySchema,
             AddRegistryKeysSchema,
             DeleteRegistryKeysSchema,
-            ImportBatFileSchema
+            ImportBatFileSchema,
+            RevertKeysSchema
         ]
       };
     }
@@ -89,6 +92,8 @@ const createServer = () => {
             return await handleDeleteRegistryKeys(args) || {};
           case 'import_bat_file':
             return await handleImportBatFile(args) || {};
+          case 'revert_keys':
+            return await handleRevertKeys(args) || {};
           default:
             return {
               content: [

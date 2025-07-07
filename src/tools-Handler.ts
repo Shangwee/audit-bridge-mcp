@@ -7,7 +7,8 @@ import {
     checkRegistryKeys,
     addRegistryKeys,
     deleteRegistryKeys,
-    remoteImportBatFile
+    remoteImportBatFile,
+    revertRegistryKeys,
 } from './tools/commands.js';
 
 import { handleUnhardeningError } from './utils/error-handling.js';
@@ -465,6 +466,74 @@ export const handleDeleteRegistryKeys = async (args: Record<string, unknown>) =>
                 {
                     type: 'json',
                     data: deleteResults
+                }
+            ]
+        };
+    } catch (error) {
+        const mcpError = handleUnhardeningError(error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Error: ${mcpError.message}`
+                }
+            ],
+            isError: true
+        }
+    }
+};
+
+/** 
+ * Handlers for revert keys and import original keys
+ */
+export const RevertKeysSchema = {
+    name: 'revert_keys',
+    description: 'Delete all registry keys changes and revert to original settings on a remote Windows machine via SSH.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            host: {
+                type: 'string',
+                description: 'The IP address or hostname of the remote machine.'
+            },
+            username: {
+                type: 'string',
+                description: 'The SSH username to authenticate with.'
+            },
+            password: {
+                type: 'string',
+                description: 'The SSH password to authenticate with.'
+            }
+        },
+        required: ['host', 'username', 'password']
+    }
+};
+
+export const handleRevertKeys = async (args: Record<string, unknown>) => {
+    try {
+        // Validate input arguments
+        const validatedArgs = z.object({
+            host: z.string(),
+            username: z.string(),
+            password: z.string(),
+        }).parse(args);
+
+        // Revert registry keys
+        const revertResults = await revertRegistryKeys(
+            validatedArgs.host,
+            validatedArgs.username,
+            validatedArgs.password,
+        );
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Registry keys reverted successfully on ${validatedArgs.host}.`
+                },
+                {
+                    type: 'json',
+                    data: revertResults
                 }
             ]
         };
