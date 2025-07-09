@@ -119,14 +119,19 @@ export async function checkAdminRightsViaSSH(
       tryKeyboard: true,
     });
 
+    const logDir = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD")}`;
+    const logFile = `${logDir}\\audit-log.txt`;
+
     // PowerShell command to check if the user is in the Administrators group
     const result = await ssh.execCommand(
         'powershell -Command "$id=[System.Security.Principal.WindowsIdentity]::GetCurrent();$p=New-Object System.Security.Principal.WindowsPrincipal($id);$p.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)"'
     );
 
+    await logAndRun(logFile, "Check Admin Rights", result.stdout);
+
     if (result.stderr) {
       throw new Error(`SSH Error: ${result.stderr}`);
-    }
+    }    
 
     const output = result.stdout.trim().toLowerCase();
 
@@ -189,8 +194,6 @@ export async function runRemoteAuditSetup(
     await ssh.connect({ host, username, password });
 
     await ssh.execCommand(`powershell -Command "New-Item -ItemType Directory -Path '${logDir}' -Force"`);
-
-    await logAndRun(logFile, "Audit Start", `Get-Date`);
 
     // Registry exports
     for (const [key, cmd] of Object.entries(registryExportCmds)) {
@@ -259,8 +262,6 @@ export async function runRemoteAuditSetup(
       "Verify firewall rules manually if unexpected results occur"
     );
 
-    await logAndRun(logFile, "Audit Complete", `Get-Date`);
-
     // exit from the remote session
     await ssh.execCommand(`powershell -Command "exit"`);
 
@@ -290,7 +291,7 @@ export async function checkRegistryKeys(
 ){
   const logFile = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD")}\\audit-log.txt`;
 
- const registryQueryCmds = {
+  const registryQueryCmds = {
     SMB1: `reg query "HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters" /v SMB1`,
     AutoShareWks: `reg query "HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters" /v AutoShareWks`,
     AutoShareServer: `reg query "HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters" /v AutoShareServer`,
@@ -305,8 +306,6 @@ export async function checkRegistryKeys(
 
   try {
     await ssh.connect({ host, username, password });
-
-    await logAndRun(logFile, "Check for registry keys", `Get-Date`);
 
     // Registry queries
     for (const [key, regQuery] of Object.entries(registryQueryCmds)) {
@@ -325,8 +324,6 @@ export async function checkRegistryKeys(
           : "unknown";
       }
     }
-
-    await logAndRun(logFile, "Check for registry keys complete", `Get-Date`);
 
     // exit from the remote session
     await ssh.execCommand(`powershell -Command "exit"`);
@@ -378,10 +375,10 @@ echo =============================================================
 echo Adding Registry Keys...
 echo =============================================================
 
-REG ADD HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v SMB1 /t REG_DWORD /d 0 /f
-REG ADD HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareWks /t REG_DWORD /d 1 /f
-REG ADD HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareServer /t REG_DWORD /d 1 /f
-REG ADD HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f
+REG ADD HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v SMB1 /t REG_DWORD /d 0 /f >> ${logFile}
+REG ADD HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareWks /t REG_DWORD /d 1 /f >> ${logFile}
+REG ADD HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareServer /t REG_DWORD /d 1 /f >> ${logFile}
+REG ADD HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v LocalAccountTokenFilterPolicy /t REG_DWORD /d 1 /f >> ${logFile}
 
 echo.
 echo Registry keys added successfully.
@@ -395,10 +392,10 @@ ECHO =============================================================
 ECHO Deleting Registry Keys...
 ECHO =============================================================
 
-REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v SMB1 /f
-REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareWks /f
-REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareServer /f
-REG DELETE HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v LocalAccountTokenFilterPolicy /f
+REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v SMB1 /f >> ${logFile}
+REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareWks /f >> ${logFile}
+REG DELETE HKEY_LOCAL_MACHINE\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters /v AutoShareServer /f >> ${logFile}
+REG DELETE HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\System /v LocalAccountTokenFilterPolicy /f >> ${logFile}
 
 ECHO.
 ECHO Registry keys deleted successfully.
@@ -432,8 +429,6 @@ exit /b 0
 
     await ssh.connect({ host, username, password });
 
-    // start logging
-    await logAndRun(logFile, "Import Registry Keys Bat Files", `Get-Date`);
 
     // Ensure tools directory exists
     await ssh.execCommand(`powershell -Command "New-Item -ItemType Directory -Path '${toolsDir}' -Force"`);
@@ -447,8 +442,6 @@ exit /b 0
     await ssh.putFile(addBatPath, remoteAddBat);
     await ssh.putFile(deleteBatPath, remoteDeleteBat);
     await ssh.putFile(revertBatPath, remoteRevertBat);
-
-    await logAndRun(logFile, "Import Registry Keys Bat Files completed", `Uploaded .bat files to ${toolsDir}`);
 
     results.output = `Successfully uploaded .bat files to ${toolsDir}`;
     return results;
@@ -489,7 +482,6 @@ export async function addRegistryKeys(
   try {
     await ssh.connect({ host, username, password });
 
-    await logAndRun(logFile, "Add Registry Keys", `Get-Date`);
 
     const addRegistryKeysBat = `C:\\tools\\add-registry-keys.bat`;
 
@@ -508,7 +500,6 @@ export async function addRegistryKeys(
       results.output = result.stdout.trim();
     }
 
-    await logAndRun(logFile, "Add Registry Keys Complete", `Get-Date`);
 
     // exit from the remote session
     await ssh.execCommand(`powershell -Command "exit"`);
@@ -550,8 +541,6 @@ export async function deleteRegistryKeys(
 
     const DeleteRegistryKeysBat = `C:\\tools\\delete-registry-keys.bat`;
 
-    await logAndRun(logFile, "Delete Registry Keys", `Get-Date`);
-
     // Run the .bat file from C:\tools
     const result = await ssh.execCommand(
       `cmd.exe /c  ${DeleteRegistryKeysBat}`
@@ -566,8 +555,6 @@ export async function deleteRegistryKeys(
     if (result.stdout) {
       results.output = result.stdout.trim();
     }
-
-    await logAndRun(logFile, "Delete Registry Keys Complete", `Get-Date`);
     
     // exit from the remote session
     await ssh.execCommand(`powershell -Command "exit"`);
@@ -609,7 +596,6 @@ export async function revertRegistryKeys(
 
     const revertRegistryKeysBat = `C:\\tools\\revert-registry-keys.bat`;
 
-    await logAndRun(logFile, "Revert Registry Keys", `Get-Date`);
 
     // Run the .bat file from C:\tools
     const result = await ssh.execCommand(
@@ -622,8 +608,6 @@ export async function revertRegistryKeys(
     if (result.stdout) {
       results.output = result.stdout.trim();
     }
-
-    await logAndRun(logFile, "Revert Registry Keys Complete", `Get-Date`);
 
     // exit from the remote session
     await ssh.execCommand(`powershell -Command "exit"`);
