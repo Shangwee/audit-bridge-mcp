@@ -343,7 +343,6 @@ export async function checkRegistryKeys(
  * @param password - The SSH password to authenticate with.
  * @returns A promise that resolves to the audit results. 
  */
-
 export async function remoteImportBatFile(
   host: string,
   username: string,
@@ -619,3 +618,160 @@ export async function revertRegistryKeys(
     ssh.dispose();
   }
 };
+
+/** 
+ * check firewall status
+ * @param host - The IP address or hostname of the remote machine.
+ * @param username - The SSH username to authenticate with.
+ * @param password - The SSH password to authenticate with.
+ * @returns A promise that resolves to the firewall status.
+ */
+export async function checkFirewallStatus(
+  host: string,
+  username: string,
+  password: string
+): Promise<object | string> {
+  const timestamp = dayjs().toISOString();
+  const logDir = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD")}`;
+  const logFile = `${logDir}\\audit-log.txt`;
+
+  const results: any = {
+    host,
+    timestamp,
+    logDir: logDir,
+    logFile: logFile,
+    output: "",
+  };
+
+  try {
+    await ssh.connect({ host, username, password });
+
+    // Firewall
+    const fwOutput = await ssh.execCommand(`netsh advfirewall show allprofiles state`);
+    await logAndRun(logFile, "Firewall Profiles", "netsh advfirewall show allprofiles state");
+
+    const profileStates = {
+      DomainProfile: "unknown",
+      PrivateProfile: "unknown",
+      PublicProfile: "unknown"
+    };
+
+    const lines = fwOutput.stdout.split(/\r?\n/);
+    let currentProfile: keyof typeof profileStates | null = null;
+
+    for (const line of lines) {
+      if (line.includes("Domain Profile Settings")) currentProfile = "DomainProfile";
+      else if (line.includes("Private Profile Settings")) currentProfile = "PrivateProfile";
+      else if (line.includes("Public Profile Settings")) currentProfile = "PublicProfile";
+      else if (/^\s*State\s*:?/i.test(line) && currentProfile) {
+        const match = line.match(/State\s*:?\s*(\w+)/i);
+        if (match) profileStates[currentProfile] = match[1].toUpperCase();
+        currentProfile = null;
+      }
+    }
+    results.output = profileStates;
+
+    // exit from the remote session
+    await ssh.execCommand(`powershell -Command "exit"`);
+
+    return results;
+  } catch (err) {
+    return `SSH execution failed: ${(err as Error).message}`;
+  } finally {
+    ssh.dispose();
+  }
+}
+
+/**
+ * Enables the firewall on a remote Windows machine via SSH.
+ * @param host - The IP address or hostname of the remote machine.
+ * @param username - The SSH username to authenticate with.
+ * @param password - The SSH password to authenticate with.
+ * @returns A promise that resolves to the results of the command execution.
+ */
+export async function enablefirewall(
+  host: string,
+  username: string,
+  password: string
+): Promise<object | string> {
+  const timestamp = dayjs().toISOString();
+  const logDir = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD")}`;
+  const logFile = `${logDir}\\audit-log.txt`;
+
+  const results: any = {
+    host,
+    timestamp,
+    logDir: logDir,
+    logFile: logFile,
+    output: "",
+  };
+
+  try {
+    await ssh.connect({ host, username, password });
+
+    const enableFirewallCmd = `netsh advfirewall set allprofiles state on`;
+    const result = await ssh.execCommand(enableFirewallCmd);
+
+    await logAndRun(logFile, "Enable Firewall", enableFirewallCmd);
+
+    if (result.stdout) {
+      results.output = result.stdout.trim();
+    }
+
+    // exit from the remote session
+    await ssh.execCommand(`powershell -Command "exit"`);
+
+    return results;
+  } catch (err) {
+    return `SSH execution failed: ${(err as Error).message}`;
+  } finally {
+    ssh.dispose();
+  }
+}
+
+/**
+ * Disables the firewall on a remote Windows machine via SSH.
+ * @param host - The IP address or hostname of the remote machine.
+ * @param username - The SSH username to authenticate with.
+ * @param password - The SSH password to authenticate with.
+ * @returns A promise that resolves to the results of the command execution.
+ */
+export async function disablefirewall(
+  host: string,
+  username: string,
+  password: string
+): Promise<object | string> {
+  const timestamp = dayjs().toISOString();
+  const logDir = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD")}`;
+  const logFile = `${logDir}\\audit-log.txt`;
+
+  const results: any = {
+    host,
+    timestamp,
+    logDir: logDir,
+    logFile: logFile,
+    output: "",
+  };
+
+  try {
+    await ssh.connect({ host, username, password });
+
+    const disableFirewallCmd = `netsh advfirewall set allprofiles state off`;
+    const result = await ssh.execCommand(disableFirewallCmd);
+
+    await logAndRun(logFile, "Disable Firewall", disableFirewallCmd);
+
+    if (result.stdout) {
+      results.output = result.stdout.trim();
+    }
+
+    // exit from the remote session
+    await ssh.execCommand(`powershell -Command "exit"`);
+
+    return results;
+  } catch (err) {
+    return `SSH execution failed: ${(err as Error).message}`;
+  } finally {
+    ssh.dispose();
+  }
+}

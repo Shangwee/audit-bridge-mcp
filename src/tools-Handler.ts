@@ -9,6 +9,9 @@ import {
     deleteRegistryKeys,
     remoteImportBatFile,
     revertRegistryKeys,
+    checkFirewallStatus,
+    enablefirewall,
+    disablefirewall
 } from './tools/commands.js';
 
 import { handleUnhardeningError } from './utils/error-handling.js';
@@ -534,6 +537,210 @@ export const handleRevertKeys = async (args: Record<string, unknown>) => {
                 {
                     type: 'json',
                     data: revertResults
+                }
+            ]
+        };
+    } catch (error) {
+        const mcpError = handleUnhardeningError(error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Error: ${mcpError.message}`
+                }
+            ],
+            isError: true
+        }
+    }
+};
+
+/**
+ * Handler for checking the firewall status on a remote Windows machine via SSH.
+ */
+export const FirewallStatusSchema = {
+    name: 'check_firewall_status',
+    description: 'Check the firewall status on a remote Windows machine via SSH.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            host: {
+                type: 'string',
+                description: 'The IP address or hostname of the remote machine.'
+            },
+            username: {
+                type: 'string',
+                description: 'The SSH username to authenticate with.'
+            },
+            password: {
+                type: 'string',
+                description: 'The SSH password to authenticate with.'
+            }
+        },
+        required: ['host', 'username', 'password']
+    }
+};
+
+export const handleCheckFirewallStatus = async (args: Record<string, unknown>) => {
+    try {
+        // Validate input arguments
+        const validatedArgs = z.object({
+            host: z.string(),
+            username: z.string(),
+            password: z.string(),
+        }).parse(args);
+
+        // Check firewall status
+        const firewallStatus = await checkFirewallStatus(
+            validatedArgs.host,
+            validatedArgs.username,
+            validatedArgs.password,
+        );
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Firewall status checked successfully on ${validatedArgs.host}.`
+                },
+                {
+                    type: 'json',
+                    data: firewallStatus
+                }
+            ]
+        };
+    } catch (error) {
+        const mcpError = handleUnhardeningError(error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Error: ${mcpError.message}`
+                }
+            ],
+            isError: true
+        }
+    }
+};
+
+/**
+ * Handler for enabling the firewall on a remote Windows machine via SSH.
+ */
+export const EnableFirewallSchema = {
+    name: 'enable_firewall',
+    description: 'Enable the firewall on a remote Windows machine via SSH.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            host: {
+                type: 'string',
+                description: 'The IP address or hostname of the remote machine.'
+            },
+            username: {
+                type: 'string',
+                description: 'The SSH username to authenticate with.'
+            },
+            password: {
+                type: 'string',
+                description: 'The SSH password to authenticate with.'
+            }
+        },
+        required: ['host', 'username', 'password']
+    }
+};
+
+export const handleEnableFirewall = async (args: Record<string, unknown>) => {
+    try {
+        // Validate input arguments
+        const validatedArgs = z.object({
+            host: z.string(),
+            username: z.string(),
+            password: z.string(),
+        }).parse(args);
+
+        // Enable firewall
+        const enableResults = await enablefirewall(
+            validatedArgs.host,
+            validatedArgs.username,
+            validatedArgs.password,
+        );
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Firewall enabled successfully on ${validatedArgs.host}.`
+                },
+                {
+                    type: 'json',
+                    data: enableResults
+                }
+            ]
+        };
+    } catch (error) {
+        const mcpError = handleUnhardeningError(error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Error: ${mcpError.message}`
+                }
+            ],
+            isError: true
+        }
+    }
+};
+
+/**
+ * Handler for disabling the firewall on a remote Windows machine via SSH.
+ */
+export const DisableFirewallSchema = {
+    name: 'disable_firewall',
+    description: 'Disable the firewall on a remote Windows machine via SSH.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            host: {
+                type: 'string',
+                description: 'The IP address or hostname of the remote machine.'
+            },
+            username: {
+                type: 'string',
+                description: 'The SSH username to authenticate with.'
+            },
+            password: {
+                type: 'string',
+                description: 'The SSH password to authenticate with.'
+            }
+        },
+        required: ['host', 'username', 'password']
+    }
+};
+
+export const handleDisableFirewall = async (args: Record<string, unknown>) => {
+    try {
+        // Validate input arguments
+        const validatedArgs = z.object({
+            host: z.string(),
+            username: z.string(),
+            password: z.string(),
+        }).parse(args);
+
+        // Disable firewall
+        const disableResults = await disablefirewall(
+            validatedArgs.host,
+            validatedArgs.username,
+            validatedArgs.password,
+        );
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Firewall disabled successfully on ${validatedArgs.host}.`
+                },
+                {
+                    type: 'json',
+                    data: disableResults
                 }
             ]
         };

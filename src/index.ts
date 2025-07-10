@@ -32,7 +32,13 @@ import {
     ImportBatFileSchema,
     handleImportBatFile,
     RevertKeysSchema,
-    handleRevertKeys
+    handleRevertKeys,
+    FirewallStatusSchema,
+    handleCheckFirewallStatus,
+    EnableFirewallSchema,
+    handleEnableFirewall,
+    DisableFirewallSchema,
+    handleDisableFirewall
 } from './tools-Handler.js';
 
 // Create and configure the MCP server
@@ -63,7 +69,10 @@ const createServer = () => {
             AddRegistryKeysSchema,
             DeleteRegistryKeysSchema,
             ImportBatFileSchema,
-            RevertKeysSchema
+            RevertKeysSchema,
+            FirewallStatusSchema,
+            EnableFirewallSchema,
+            DisableFirewallSchema
         ]
       };
     }
@@ -94,6 +103,12 @@ const createServer = () => {
             return await handleImportBatFile(args) || {};
           case 'revert_keys':
             return await handleRevertKeys(args) || {};
+          case 'check_firewall_status':
+            return await handleCheckFirewallStatus(args) || {};
+          case 'enable_firewall':
+            return await handleEnableFirewall(args) || {};
+          case 'disable_firewall':
+            return await handleDisableFirewall(args) || {};
           default:
             return {
               content: [
