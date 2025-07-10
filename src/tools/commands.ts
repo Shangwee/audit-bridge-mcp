@@ -70,6 +70,22 @@ const manualCheckGuides: Record<"local" | "services" | "network", string> = {
 };
 
 /**
+ * Manual disable/enable guides for symantec
+ */
+const symantecManualGuides: Record<"disable" | "enable", string> = {
+  disable: `Due to Symantec's protection against disabling its services through command prompt. Manual intervention is required to disable Symantec for Nessus.
+If the status is for "(STATE" is 4 RUNNING), Auditor can follow these steps to disable Symantec
+1. Press the Windows Key and R, User can also type "run" in the start menu.
+2. Type "smc -stop"
+3. Recheck the status of Symantec with the tool, double check manually that Symantec is completely disabled as well. The tool is not perfect D:`,
+  enable: `Due to Symantec's protection against enabling its services through command prompt. Manual intervention is required to enable Symantec for Nessus.
+If the status is for "(STATE" is 1 STOPPED), Auditor can follow these steps to enable Symantec
+1. Press the Windows Key and R, User can also type "run" in the start menu.
+2. Type "smc -start"
+3. Recheck the status of Symantec with the tool, double check manually that Symantec is enabled as well. The tool is not perfect D:`
+};
+
+/**
  * Logs a command execution and runs it via SSH.
  * @param logFile - The file to log the command output.
  * @param label - A label for the command being executed.
@@ -97,6 +113,15 @@ export const listManualChecks = async (
   type: "local" | "services" | "network"
 ): Promise<string> => {
   return manualCheckGuides[type];
+};
+
+/**
+ * Returns a Symantec manual guide string based on action.
+ * @param action - "disable" or "enable"
+ * @returns A formatted Symantec manual guide
+ */
+export const getSymantecManualGuide = async (action: "disable" | "enable"): Promise<string> => {
+  return symantecManualGuides[action];
 };
 
 /**

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
     listManualChecks,
+    getSymantecManualGuide,
     checkAdminRightsViaSSH,
     runRemoteAuditSetup,
     checkRegistryKeys,
@@ -51,6 +52,56 @@ export const handleListManualChecks = async (args: Record<string, unknown>) => {
                 {
                     type: 'text',
                     text: manualChecks
+                }
+            ]
+        };
+    } catch (error) {
+        const mcpError = handleUnhardeningError(error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Error: ${mcpError.message}`
+                }
+            ],
+            isError: true
+        }
+    }
+}
+
+/**
+ * Handler for getting Symantec manual guide based on action.
+ */
+export const SymantecManualGuideSchema = {
+    name: 'get_symantec_manual_guide',
+    description: 'Get Symantec manual guide based on action.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            action: {
+                type: 'string',
+                enum: ['disable', 'enable'],
+                description: 'Action to perform, either "disable" or "enable".'
+            }
+        },
+        required: ['action']
+    }
+}
+export const handleGetSymantecManualGuide = async (args: Record<string, unknown>) => {
+    try {
+        // Validate input arguments
+        const validatedArgs = z.object({
+            action: z.enum(['disable', 'enable'])
+        }).parse(args);
+
+        // Get Symantec manual guide based on action
+        const manualGuide = await getSymantecManualGuide(validatedArgs.action);
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: manualGuide
                 }
             ]
         };

@@ -38,7 +38,9 @@ import {
     EnableFirewallSchema,
     handleEnableFirewall,
     DisableFirewallSchema,
-    handleDisableFirewall
+    handleDisableFirewall,
+    SymantecManualGuideSchema,
+    handleGetSymantecManualGuide
 } from './tools-Handler.js';
 
 // Create and configure the MCP server
@@ -72,7 +74,8 @@ const createServer = () => {
             RevertKeysSchema,
             FirewallStatusSchema,
             EnableFirewallSchema,
-            DisableFirewallSchema
+            DisableFirewallSchema,
+            SymantecManualGuideSchema
         ]
       };
     }
@@ -89,6 +92,8 @@ const createServer = () => {
         switch (name) {
           case 'list_manual_checks':
             return await handleListManualChecks(args) || {};
+          case 'get_symantec_manual_guide':
+            return await handleGetSymantecManualGuide(args) || {};
           case 'check_admin_rights_remote':
             return await handleCheckAdminRightsRemote(args) || {};
           case 'run_remote_audit_setup':
