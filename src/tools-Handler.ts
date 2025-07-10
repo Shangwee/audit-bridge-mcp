@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
     listManualChecks,
     getSymantecManualGuide,
+    checkSymantecStatus,
     checkAdminRightsViaSSH,
     runRemoteAuditSetup,
     checkRegistryKeys,
@@ -102,6 +103,69 @@ export const handleGetSymantecManualGuide = async (args: Record<string, unknown>
                 {
                     type: 'text',
                     text: manualGuide
+                }
+            ]
+        };
+    } catch (error) {
+        const mcpError = handleUnhardeningError(error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Error: ${mcpError.message}`
+                }
+            ],
+            isError: true
+        }
+    }
+}
+
+/**
+ * Handler for checking the status of the Symantec service on a remote system.
+ */
+export const checkSymantecStatusSchema = {
+    name: 'check_symantec_status',
+    description: 'Check the status of the Symantec service on a remote system.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            host: {
+                type: 'string',
+                description: 'The hostname or IP address of the remote system.'
+            },
+            username: {
+                type: 'string',
+                description: 'The SSH username to authenticate with.'
+            },
+            password: {
+                type: 'string',
+                description: 'The SSH password to authenticate with.'
+            }
+        },
+        required: ['host', 'username', 'password']
+    }
+}
+export const handleCheckSymantecStatus = async (args: Record<string, unknown>) => {
+    try {
+        // Validate input arguments
+        const validatedArgs = z.object({
+            host: z.string(),
+            username: z.string(),
+            password: z.string()
+        }).parse(args);
+
+        // Check Symantec service status
+        const status = await checkSymantecStatus(
+            validatedArgs.host,
+            validatedArgs.username,
+            validatedArgs.password
+        );
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Symantec service status on ${validatedArgs.host}:\n${JSON.stringify(status, null, 2)}`
                 }
             ]
         };

@@ -302,6 +302,47 @@ export async function runRemoteAuditSetup(
   }
 }
 
+/** 
+ * check if sysmantec is running
+ * @param host - The IP address or hostname of the remote machine.
+ * @param username - The SSH username to authenticate with.
+ * @param password - The SSH password to authenticate with.
+ * @returns A promise that resolves to the Symantec service status.
+ */
+export async function checkSymantecStatus(
+  host: string,
+  username: string,
+  password: string
+): Promise<object | string> {
+  const logFile = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD")}\\audit-log.txt`;
+
+  const results: any = {
+    host,
+    logFile: logFile,
+    symantec_status: "",
+  };
+
+  try {
+    await ssh.connect({ host, username, password });
+
+    // Check Symantec service status
+    const sepStatus = await ssh.execCommand(`powershell -Command "sc query SepMasterService"`);
+    await logAndRun(logFile, "Symantec Service Check", "sc query SepMasterService");
+
+    const state = sepStatus.stdout.match(/STATE\s+:\s+\d+\s+(\w+)/);
+    results.symantec_status = state ? state[1] : "Not found";
+
+    // exit from the remote session
+    await ssh.execCommand(`powershell -Command "exit"`);
+
+    return results;
+  } catch (err) {
+    return `SSH execution failed: ${(err as Error).message}`;
+  } finally {
+    ssh.dispose();
+  }
+}
+
 /**
  * check all registry keys that are required for nessus to work properly.
  * @param host - The IP address or hostname of the remote machine.
