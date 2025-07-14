@@ -6,6 +6,16 @@ Audit Bridge MCP is a Model Context Protocol (MCP) server built with TypeScript 
 
 Audit Bridge MCP streamlines Windows system audits by exposing multiple tools and operations behind a unified MCP interface. It is designed for integration with MCP clients and automation workflows related to security, compliance, and administration.
 
+## Benefits
+
+- **Centralized Audit Management**: Unified MCP server to orchestrate various Windows system auditing tools, reducing complexity and improving operational efficiency.
+- **Standardized Interface**: All audit-related tools and commands exposed through a standardized Model Context Protocol interface, making integration with MCP clients straightforward.
+- **Modular and Extensible**: Modular file structure enables easy maintenance and future expansion with additional tools or features.
+- **Remote Automation**: Supports remote audit operations via SSH, allowing administrators to manage and audit multiple Windows systems from a single location.
+- **Security and Compliance**: Facilitates security checks (firewall status, admin rights verification, registry audits) to help maintain compliance with organizational or regulatory requirements.
+- **Flexibility**: Enables both automated and manual security checks, supporting various use cases from routine audits to incident response.
+- **Efficiency**: Reduces manual effort and potential for human error by automating repetitive system checks and configuration verifications.
+
 ## Requirements
 
 - [Node.js](https://nodejs.org/) (recommended: latest LTS version)
@@ -36,6 +46,10 @@ The project follows a modular structure for easy maintenance and scalability:
   - Firewall control (enable/disable/status)
   - Registry key audit and modifications
   - Remote audit setup (e.g., via `.bat` files)
+ 
+## Limitation
+- currently running commands through SSH
+- Occasionally, need to follow troubleshoot steps
 
 ## Installation
 
@@ -78,11 +92,3 @@ For example, use the stop (🗑️) and start (▶️) controls in your MCP clie
 ![image2](/img/refresh.png)
 
 This will often resolve stuck or unresponsive tool sessions.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## Contact
-
-For questions or support, open an issue on [GitHub](https://github.com/Shangwee/audit-bridge-mcp/issues).
