@@ -841,3 +841,46 @@ export async function disablefirewall(
     ssh.dispose();
   }
 }
+
+/**
+ * view logs content from the remote machine
+ * @param host - The IP address or hostname of the remote machine.
+ * @param username - The SSH username to authenticate with.
+ * @param password - The SSH password to authenticate with.
+ * @return A promise that resolves to the content of the log file.
+ */
+
+export async function viewLogs(
+  host: string,
+  username: string,
+  password: string
+): Promise<string | object> {
+  const logDir = `C:\\AuditLogs\\${dayjs().format("YYYYMMDD")}`;
+  const logFile = `${logDir}\\audit-log.txt`;
+
+  try {
+    await ssh.connect({ host, username, password });
+
+    // Check if the log file exists
+    const checkLogCmd = `powershell -Command "Test-Path '${logFile}'"`;
+    const checkResult = await ssh.execCommand(checkLogCmd);
+
+    if (checkResult.stdout.trim() === "False") {
+      return `Log file does not exist at ${logFile}`;
+    }
+
+    // Read the log file content
+    const readLogCmd = `powershell -Command "Get-Content '${logFile}'"`;
+    const result = await ssh.execCommand(readLogCmd);
+
+    if (result.stderr) {
+      return `Error reading log file: ${result.stderr}`;
+    }
+
+    return result.stdout.trim();
+  } catch (err) {
+    return `SSH execution failed: ${(err as Error).message}`;
+  } finally {
+    ssh.dispose();
+  }
+}

@@ -43,6 +43,8 @@ import {
     handleGetSymantecManualGuide,
     checkSymantecStatusSchema,
     handleCheckSymantecStatus,
+    viewLogsSchema,
+    handleViewLogs
 } from './tools-Handler.js';
 
 // Create and configure the MCP server
@@ -78,7 +80,8 @@ const createServer = () => {
             EnableFirewallSchema,
             DisableFirewallSchema,
             SymantecManualGuideSchema,
-            checkSymantecStatusSchema
+            checkSymantecStatusSchema,
+            viewLogsSchema
         ]
       };
     }
@@ -119,6 +122,8 @@ const createServer = () => {
             return await handleEnableFirewall(args) || {};
           case 'disable_firewall':
             return await handleDisableFirewall(args) || {};
+          case 'view_logs':
+            return await handleViewLogs(args) || {};
           default:
             return {
               content: [

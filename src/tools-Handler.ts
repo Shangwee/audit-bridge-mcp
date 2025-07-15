@@ -13,7 +13,8 @@ import {
     revertRegistryKeys,
     checkFirewallStatus,
     enablefirewall,
-    disablefirewall
+    disablefirewall,
+    viewLogs
 } from './tools/commands.js';
 
 import { handleUnhardeningError } from './utils/error-handling.js';
@@ -856,6 +857,71 @@ export const handleDisableFirewall = async (args: Record<string, unknown>) => {
                 {
                     type: 'json',
                     data: disableResults
+                }
+            ]
+        };
+    } catch (error) {
+        const mcpError = handleUnhardeningError(error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Error: ${mcpError.message}`
+                }
+            ],
+            isError: true
+        }
+    }
+};
+
+export const viewLogsSchema = {
+    name: 'view_logs',
+    description: 'View logs from the remote system.',
+    inputSchema: {
+        type: 'object',
+        properties: {
+            host: {
+                type: 'string',
+                description: 'The IP address or hostname of the remote machine.'
+            },
+            username: {
+                type: 'string',
+                description: 'The SSH username to authenticate with.'
+            },
+            password: {
+                type: 'string',
+                description: 'The SSH password to authenticate with.'
+            }
+        },
+        required: ['host', 'username', 'password']
+    }
+};
+
+export const handleViewLogs = async (args: Record<string, unknown>) => {
+    try {
+        // Validate input arguments
+        const validatedArgs = z.object({
+            host: z.string(),
+            username: z.string(),
+            password: z.string(),
+        }).parse(args);
+
+        // View logs from the remote system
+        const logs = await viewLogs(
+            validatedArgs.host,
+            validatedArgs.username,
+            validatedArgs.password,
+        );
+
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Logs retrieved successfully from ${validatedArgs.host}.`
+                },
+                {
+                    type: 'json',
+                    data: logs
                 }
             ]
         };
