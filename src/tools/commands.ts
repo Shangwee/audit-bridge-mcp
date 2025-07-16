@@ -97,7 +97,7 @@ const logAndRun = async (logFile:string, label: string, rawCommand: string) => {
     const powershellCommand = `
       Add-Content -Path '${logFile}' '[${label}]';
       Add-Content -Path '${logFile}' 'Command: ${rawCommand.replace(/'/g, "''")}';
-      ${escapedCmd} | Out-File -Append -FilePath '${logFile}' -Encoding UTF8;
+      ${escapedCmd};
     `.trim();
 
     const encoded = powershellCommand.replace(/\n/g, " ");
